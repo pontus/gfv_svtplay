@@ -6,7 +6,7 @@
 #
 # To add:
 #
-# get_flash_videos --add-plugin http://github.com/pontus/gfv-plugins/raw/master/Svtplay.pm
+# get_flash_videos --add-plugin http://github.com/pontus/gfv_svtplay/raw/master/Svtplay.pm
 
 
 package FlashVideo::Site::Svtplay;
@@ -20,7 +20,7 @@ use WWW::Mechanize::Link;
 
 
 our @update_urls = (
-  'http://github.com/pontus/gfv-plugins/raw/master/Svtplay.pm'
+  'http://github.com/pontus/gfv_svtplay/raw/master/Svtplay.pm'
 );
 
 sub find_video {
