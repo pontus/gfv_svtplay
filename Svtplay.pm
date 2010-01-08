@@ -14,7 +14,7 @@ package FlashVideo::Site::Svtplay;
 use strict;
 
 use CGI;
-use FlashVideo::Utils;
+eval { use FlashVideo::Utils };
 use WWW::Mechanize::Link;
 
 
@@ -32,8 +32,8 @@ sub find_video {
   $browser->get($browser->response->header("Location")) if $browser->response->code =~ /30\d/;
 
   # print $browser->content;
-
-  info("Parsing page.");
+  
+  debug("Parsing page.");
   my $data = XML::Twig->new();
   $data->parse($browser->content);
 	
@@ -41,6 +41,18 @@ sub find_video {
     die "Error while parsing page: $@";
   }
   
+
+  if ($data->get_xpath('//rss'))
+  {
+      my @links = $data->get_xpath('//item/link');
+      my $pageurl = $links[0]->xml_text();
+      # Feed actually contains a lot of extra info we could use, but
+      # for the moment, we're satisfied with what we normally get.
+      debug("Page from RSS, going through to normal page $pageurl. ");
+      
+      $browser->get($pageurl);
+      return find_video($self,$browser);
+  }
 
   my @params = $data->get_xpath('//param[@value=~ /pathflv/]');
   my $pathflv = $params[0]->{'att'}->{'value'};
