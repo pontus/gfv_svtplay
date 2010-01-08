@@ -60,9 +60,15 @@ sub find_video {
   debug("Extracted flash parameters, parsing");
 
   my $form = CGI->new($pathflv);
-  
   my $rtmppath = $form->param('pathflv');
- 
+
+  # Handle errorneous URLs with $junk attached.
+  if ($rtmppath =~ /\$/)
+  {
+      # Get everything before $
+      $rtmppath = ($rtmppath =~ /([^\$]*)\$/)[0];
+  }
+
   # folderStructure will contain any series name
   my $series = ($form->param('folderStructure') =~ /(.*)\.Hela program/)[0];
   my $title = $form->param('title');
@@ -70,8 +76,7 @@ sub find_video {
 
   my $filename = "$series - $title ($date).flv";
   if ($title == $series) 
-  {
-# Give a nicer filename for movies
+  {   # Give a nicer filename for movies
       $filename = "$title ($date).flv";
   }
 
