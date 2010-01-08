@@ -13,7 +13,6 @@ package FlashVideo::Site::Svtplay;
 
 use strict;
 
-use Data::Dumper;
 use CGI;
 use FlashVideo::Utils;
 use WWW::Mechanize::Link;
