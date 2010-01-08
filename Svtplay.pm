@@ -31,8 +31,6 @@ sub find_video {
   $browser->allow_redirects;
   $browser->get($browser->response->header("Location")) if $browser->response->code =~ /30\d/;
 
-  # print $browser->content;
-  
   debug("Parsing page.");
   my $data = XML::Twig->new();
   $data->parse($browser->content);
@@ -75,7 +73,7 @@ sub find_video {
   my $date = $form->param('broadcastDate');
 
   my $filename = "$series - $title ($date).flv";
-  if ($title == $series) 
+  if ($title eq $series) 
   {   # Give a nicer filename for movies
       $filename = "$title ($date).flv";
   }
