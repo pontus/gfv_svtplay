@@ -78,6 +78,9 @@ sub find_video {
       $filename = "$title ($date).flv";
   }
 
+  # Replace some characters not allowed in filenames.
+  $filename =~ s,[/:\\],-,g;
+
   info("Fetching $title, originally aired $date.\n" .
        "Using URL: $rtmppath\n");
   
