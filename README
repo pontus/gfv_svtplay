@@ -1,0 +1,9 @@
+This adds support for svt play (svtplay.se) to get-flash-videos.
+
+To add, do:
+
+get_flash_videos --add-plugin http://github.com/pontus/gfv_svtplay/raw/master/Svtplay.pm
+
+Extra dependencies (compared to base get_flash_videos): XML::Twig, CGI.
+
+
