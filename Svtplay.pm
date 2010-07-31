@@ -52,13 +52,13 @@ sub find_video {
       return find_video($self,$browser);
   }
 
-  my @params = $data->get_xpath('//param[@value=~ /pathflv/]');
+  my @params = $data->get_xpath('//param[@name=~ /flashvars/]');
   my $pathflv = $params[0]->{'att'}->{'value'};
 
   debug("Extracted flash parameters, parsing");
 
   my $form = CGI->new($pathflv);
-  my $rtmppath = $form->param('pathflv');
+  my $rtmppath = $form->param('dynamicStreams');
 
   # Handle errorneous URLs with $junk attached.
   if ($rtmppath =~ /\$/)
@@ -66,6 +66,9 @@ sub find_video {
       # Get everything before $
       $rtmppath = ($rtmppath =~ /([^\$]*)\$/)[0];
   }
+
+  # Just extract the path
+  $rtmppath = ($rtmppath =~ /url:([^,]*),bitrate.*/)[0];
 
   # folderStructure will contain any series name
   my $series = ($form->param('folderStructure') =~ /(.*)\.Hela program/)[0];
