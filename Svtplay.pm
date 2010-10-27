@@ -33,10 +33,14 @@ sub find_video {
 
   debug("Parsing page.");
   my $data = XML::Twig->new();
-  $data->parse($browser->content);
+  print $browser->content;
+  $data->safe_parse($browser->content);
 	
   if ($@) {
-    die "Error while parsing page: $@";
+      debug("Error while parsing page: $@");
+
+      if (!$data->get_xpath('//link');
+	  die "Fatal error while parsing page: $@";
   }
   
 
@@ -52,13 +56,28 @@ sub find_video {
       return find_video($self,$browser);
   }
 
+  my $rtmppath;
+  my $form;
   my @params = $data->get_xpath('//param[@name=~ /flashvars/]');
-  my $pathflv = $params[0]->{'att'}->{'value'};
 
-  debug("Extracted flash parameters, parsing");
+  if ($params[0])
+  {
+      debug("We seem to have flashvars");
+      my $pathflv = $params[0]->{'att'}->{'value'};
 
-  my $form = CGI->new($pathflv);
-  my $rtmppath = $form->param('dynamicStreams');
+      debug("Extracted flash parameters, parsing");
+      
+      $form = CGI->new($pathflv);
+      $rtmppath = $form->param('dynamicStreams');
+  }
+  else
+  {
+   debug("No flashvars, hoping this is unencrypted");
+   // TODO: Do we have pages like this, how do we handle them?
+
+ 
+  }
+
 
   # Handle errorneous URLs with $junk attached.
   if ($rtmppath =~ /\$/)
