@@ -39,8 +39,10 @@ sub find_video {
   if ($@) {
       debug("Error while parsing page: $@");
 
-      if (!$data->get_xpath('//link');
+      if (!$data->get_xpath('//link'))
+          {
 	  die "Fatal error while parsing page: $@";
+	}
   }
   
 
@@ -73,7 +75,7 @@ sub find_video {
   else
   {
    debug("No flashvars, hoping this is unencrypted");
-   // TODO: Do we have pages like this, how do we handle them?
+   # TODO: Do we have pages like this, how do we handle them?
 
  
   }
