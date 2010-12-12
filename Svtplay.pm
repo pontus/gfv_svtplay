@@ -7,7 +7,13 @@
 # To add:
 #
 # get_flash_videos --add-plugin http://github.com/pontus/gfv_svtplay/raw/master/Svtplay.pm
-
+# (If that doesn't work, it may be LWP having problems with gzip content 
+#  transfer from github, in that case, it should be fixable by
+# 
+# cd $HOME/.get_flash_videos/plugins
+# gzip -d -c - < Svtplay.pm >Svtplay.pm.fixed 
+# mv Svtplay.pm.fixed Svtplay.pm
+# 
 
 package FlashVideo::Site::Svtplay;
 
