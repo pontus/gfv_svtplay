@@ -39,7 +39,6 @@ sub find_video {
 
   debug("Parsing page.");
   my $data = XML::Twig->new();
-  print $browser->content;
   $data->safe_parse($browser->content);
 	
   if ($@) {
@@ -77,12 +76,19 @@ sub find_video {
       
       $form = CGI->new($pathflv);
       $rtmppath = $form->param('dynamicStreams');
+
+      if (!$rtmppath)
+      {
+	  debug("No dynamicStreams, pathflv?");
+	  $rtmppath = $form->param('pathflv');
+	  debug ("Path: $rtmppath");
+      }
   }
+
   else
   {
    debug("No flashvars, hoping this is unencrypted");
    # TODO: Do we have pages like this, how do we handle them?
-
  
   }
 
@@ -94,8 +100,12 @@ sub find_video {
       $rtmppath = ($rtmppath =~ /([^\$]*)\$/)[0];
   }
 
-  # Just extract the path
-  $rtmppath = ($rtmppath =~ /url:([^,]*),bitrate.*/)[0];
+
+  if ($rtmppath =~ /url:/)
+  {
+      # Just extract the path
+      $rtmppath = ($rtmppath =~ /url:([^,]*),bitrate.*/)[0];
+  }
 
   # folderStructure will contain any series name
   my $series = ($form->param('folderStructure') =~ /(.*)\.Hela program/)[0];
@@ -127,6 +137,7 @@ sub find_video {
       tcUrl => $rtmppath,
       rtmp => $rtmppath,
       flv => $filename,
+      resume => '',
      };
 }
 
