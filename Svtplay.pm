@@ -20,9 +20,10 @@ package FlashVideo::Site::Svtplay;
 use strict;
 
 use CGI;
+use JSON;
 eval { use FlashVideo::Utils };
 use WWW::Mechanize::Link;
-
+use WWW::Mechanize;
 
 our @update_urls = (
   'http://github.com/pontus/gfv_svtplay/raw/master/Svtplay.pm'
@@ -37,91 +38,183 @@ sub find_video {
   $browser->allow_redirects;
   $browser->get($browser->response->header("Location")) if $browser->response->code =~ /30\d/;
 
-  debug("Parsing page.");
-  my $data = XML::Twig->new();
-  $data->safe_parse($browser->content);
-	
-  if ($@) {
-      debug("Error while parsing page: $@");
+  my $page = $browser->content;
 
-      if (!$data->get_xpath('//link'))
-          {
-	  die "Fatal error while parsing page: $@";
-	}
+  # Program main page, which we should add embed to?
+  if ($page =~ /data-popout-href/)
+  {
+
+      my $pageurl = $browser->uri() . '?type=embed';
+      $browser->get($pageurl);
+      debug("Program main page, redoing for $pageurl");
+      return find_video($self,$browser);
+  }
+
+  # 
+ 
+  my $data = XML::Twig->new();
+
+  debug("Parsing page.");
+
+  my $ok = $data->safe_parse($page);
+
+  if (!$ok) {
+
+      debug("Error while parsing page: $@");
+      debug("Will try to fix some HTML issues and retry");
+
+      # Repair broken html
+      $page =~ s/<link[^>]*>//g;
+      $page =~ s/<meta[^>]*>//g;
+      $page =~ s/<img[^>]*>//g;
+      $page =~ s/<input[^>]*>//g;
+      $page =~ s/document.write([^)]*)//;
+
+      my $ok = $data->safe_parse($page);
+      
+      if (!$ok) 
+      {
+	  die "Fatal error while parsing page, even after fixing HTML: $@";
+      }
   }
   
+  # $data (Twig) should be okay here
+
 
   if ($data->get_xpath('//rss'))
   {
+      # We've got a page from a feed?
+      my @mediacontents = $data->get_xpath('//media:content');
+      my @subtitle = $data->get_xpath('//media:subTitle');
+      my @titleString = $data->get_xpath('//media:title');
+      my $filename;
+
+      my $rtmppath = undef;
+      my $bitrate = 0;
+
+      if (@titleString)
+      {
+	  $filename = @titleString[0]->children_text() . ".flv";
+	  # Replace some characters not allowed in filenames.
+	  $filename =~ s,[/:\\],-,g;
+
+	  debug("Filename: $filename");
+      }
+      
+      if (@subtitle)
+      {
+	  debug("We should download " . @subtitle[0]->{'att'}->{'href'});
+      
+	  my $suffix = (@subtitle[0]->{'att'}->{'href'} =~ s/.*\.//r);
+	  my $subfilename = ($filename =~ s/flv$//r) . $suffix ;
+
+	  info ("Getting subtitlefile.");
+	  debug("$subfilename $suffix "  . @subtitle[0]->{'att'}->{'href'});
+	  # Get the file, do some magic to not have a gzip file.
+	  my $mech = WWW::Mechanize->new;
+	  $mech->add_header( 'Accept-Encoding' => undef );
+	  $mech->get( @subtitle[0]->{'att'}->{'href'},
+		     ":content_file" => $subfilename);
+	  
+      }
+      
+
+      foreach my $content (@mediacontents)
+      {
+	  if ( $content->{'att'}->{'bitrate'} > $bitrate && 
+	       $content->{'att'}->{'type'} == "video/mp4")
+	  {
+	      $bitrate = $content->{'att'}->{'bitrate'};
+	      $rtmppath = $content->{'att'}->{'url'};
+
+	      debug ("Bitrate: " . $bitrate  . " URL: " . $rtmppath);
+	  } 
+      }
+
+	  if ($rtmppath) 
+	  {
+	      my $app = ($rtmppath =~ m,//.*?/([^/]*?/[^/]*?)/,)[0];
+
+	      return
+	       {
+		  app =>  $app,
+		  pageUrl => $mediacontents[0]->first_child("media:player")->{'att'}->{'url'},
+		  tcUrl => $rtmppath,
+		  rtmp => $rtmppath,
+		  flv => $filename,
+		  resume => '',
+	      };
+
+	  }
+
+
       my @links = $data->get_xpath('//item/link');
       my $pageurl = $links[0]->xml_text();
-      # Feed actually contains a lot of extra info we could use, but
-      # for the moment, we're satisfied with what we normally get.
-      debug("Page from RSS, going through to normal page $pageurl. ");
+
+      debug("Page from RSS but no good URLs, going through to normal page $pageurl. ");
       
       $browser->get($pageurl);
       return find_video($self,$browser);
   }
 
   my $rtmppath;
-  my $form;
+
   my @params = $data->get_xpath('//param[@name=~ /flashvars/]');
 
-  if ($params[0])
+  if (!@params )
   {
-      debug("We seem to have flashvars");
-      my $pathflv = $params[0]->{'att'}->{'value'};
-
-      debug("Extracted flash parameters, parsing");
-      
-      $form = CGI->new($pathflv);
-      $rtmppath = $form->param('dynamicStreams');
-
-      if (!$rtmppath)
-      {
-	  debug("No dynamicStreams, pathflv?");
-	  $rtmppath = $form->param('pathflv');
-	  debug ("Path: $rtmppath");
-      }
+      die "Failed when extracting flash player parameters. This should not happen!";
   }
+  
+  
+  my $pathflv = $params[0]->{'att'}->{'value'};
+  
+  $pathflv =~ s/^json=//;
+  
+  debug("Extracted flash parameters, parsing");
+  
 
-  else
-  {
-   debug("No flashvars, hoping this is unencrypted");
-   # TODO: Do we have pages like this, how do we handle them?
- 
-  }
+  my $json = JSON->new->utf8->decode($pathflv);      
+  
+  debug("JSON: " . $json->{context}->{title}); 
 
-
-  # Handle errorneous URLs with $junk attached.
-  if ($rtmppath =~ /\$/)
-  {
-      # Get everything before $
-      $rtmppath = ($rtmppath =~ /([^\$]*)\$/)[0];
-  }
-
-
-  if ($rtmppath =~ /url:/)
-  {
-      # Just extract the path
-      $rtmppath = ($rtmppath =~ /url:([^,]*),bitrate.*/)[0];
-  }
-
-  # folderStructure will contain any series name
-  my $series = ($form->param('folderStructure') =~ /(.*)\.Hela program/)[0];
-  my $title = $form->param('title');
-  my $date = $form->param('broadcastDate');
-
-  my $filename = "$series - $title ($date).flv";
-  if ($title eq $series) 
-  {   # Give a nicer filename for movies
-      $filename = "$title ($date).flv";
-  }
+  my $filename = $json->{statistics}->{title} . ".flv";
 
   # Replace some characters not allowed in filenames.
   $filename =~ s,[/:\\],-,g;
 
-  info("Fetching $title, originally aired $date.\n" .
+
+  my $bitrate=0;
+  
+  foreach my $videoref (@{$json->{video}->{videoReferences}}) 
+  {
+      if ($videoref->{playerType} == "flash" && $videoref->{bitrate} > $bitrate)
+      {
+	  $rtmppath = $videoref->{url};
+	  $bitrate = $videoref->{bitrate};
+	  debug ("Path: $rtmppath with bitrate $bitrate" );
+      }
+  }
+
+  if (exists $json->{video}->{subtitleReferences})
+  {
+      debug("We should download " . $json->{video}->{subtitleReferences}[0]->{url});
+      
+      my $suffix = ($json->{video}->{subtitleReferences}[0]->{url} =~ s/.*\.//r);
+
+      my $subfilename = ($filename =~ s/flv$//r) . $suffix ;
+
+      info ("Getting subtitlefile.");
+
+      # Get the file, do some magic to not have a gzip file.
+      my $mech = WWW::Mechanize->new;
+      $mech->add_header( 'Accept-Encoding' => undef );
+      $mech->get($json->{video}->{subtitleReferences}[0]->{url},
+		 ":content_file" => $subfilename);
+  }
+
+
+  info("Fetching " . $json->{context}->{title} . ", originally aired " . $json->{statistics}->{broadcastDate} . ".\n" .
        "Using URL: $rtmppath\n");
   
   # Extract the first non host parts of the url as app
@@ -133,7 +226,7 @@ sub find_video {
   # Return a structure that is used to construct the rtmpdump command.
   return {
       app =>  $app,
-      pageUrl => $form->param('urlinmail'),
+      pageUrl => "http://www.svtplay.se" .$json->{context}->{popoutUrl},
       tcUrl => $rtmppath,
       rtmp => $rtmppath,
       flv => $filename,
