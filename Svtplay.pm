@@ -20,7 +20,6 @@ package FlashVideo::Site::Svtplay;
 use strict;
 
 use CGI;
-use JSON;
 eval { use FlashVideo::Utils };
 use WWW::Mechanize::Link;
 use WWW::Mechanize;
@@ -33,6 +32,7 @@ sub find_video {
   my ($self, $browser) = @_;
 
   die "Need XML::Twig for svtplay.se" unless eval { require XML::Twig };
+  die "Need JSON for svtplay.se" unless eval { require JSON };
 
   # Allow redirection.
   $browser->allow_redirects;
