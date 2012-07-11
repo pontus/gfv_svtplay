@@ -33,6 +33,7 @@ sub find_video {
 
   die "Need XML::Twig for svtplay.se" unless eval { require XML::Twig };
   die "Need JSON for svtplay.se" unless eval { require JSON };
+  die "Need HTML::Detoxifier for svtplay.se" unless eval { require HTML::Detoxifier };
 
   # Allow redirection.
   $browser->allow_redirects;
@@ -63,14 +64,15 @@ sub find_video {
       debug("Error while parsing page: $@");
       debug("Will try to fix some HTML issues and retry");
 
-      # Repair broken html
-      $page =~ s/<link[^>]*>//g;
-      $page =~ s/<meta[^>]*>//g;
-      $page =~ s/<img[^>]*>//g;
-      $page =~ s/<input[^>]*>//g;
-      $page =~ s/document.write([^)]*)//;
 
-      my $ok = $data->safe_parse($page);
+      # Repair broken html
+      $page =~ s/document.write([^)]*)//mg;
+      debug('Removed document.write');
+
+      # Use Detoxifier to clean up bad HTML.
+      my $fixedpage = HTML::Detoxifier::detoxify($page, disallow => [qw()]);
+  debug($fixedpage);
+      my $ok = $data->safe_parse($fixedpage);
       
       if (!$ok) 
       {
@@ -178,7 +180,9 @@ sub find_video {
   
   debug("JSON: " . $json->{context}->{title}); 
 
-  my $filename = $json->{statistics}->{title} . ".flv";
+  my @title = $data->get_xpath('//title');
+  my $filename = @title[0]->children_text();
+  $filename =~ s, *\|.*$,.flv,;
 
   # Replace some characters not allowed in filenames.
   $filename =~ s,[/:\\],-,g;
@@ -196,15 +200,17 @@ sub find_video {
       }
   }
 
-  if (exists $json->{video}->{subtitleReferences})
+  my @numSubs = $json->{video}->{subtitleReferences};
+  if ( $json->{video}->{subtitleReferences}[0]->{url})
   {
+      debug("Number of subtitlereferences " . scalar(@numSubs));
       debug("We should download " . $json->{video}->{subtitleReferences}[0]->{url});
       
       my $suffix = ($json->{video}->{subtitleReferences}[0]->{url} =~ s/.*\.//r);
 
       my $subfilename = ($filename =~ s/flv$//r) . $suffix ;
 
-      info ("Getting subtitlefile.");
+      info ("Getting subtitlefile " . $subfilename  . " URL:" . $json->{video}->{subtitleReferences}[0]->{url} );
 
       # Get the file, do some magic to not have a gzip file.
       my $mech = WWW::Mechanize->new;
